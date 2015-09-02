@@ -735,7 +735,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
   // 'on' and be composed of only English letters.
   var EVENT_HANDLER_ATTR_REGEXP = /^(on[a-z]+|formaction)$/;
 
-  function parseIsolateBindings(scope, directiveName, isController) {
+  function parseIsolateBindings(scope, directiveName, isController, scopeTypes) {
     var LOCAL_REGEXP = /^\s*([@&]|=(\*?))(\??)\s*(\w*)\s*$/;
 
     var bindings = {};
@@ -756,6 +756,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         mode: match[1][0],
         collection: match[2] === '*',
         optional: match[3] === '?',
+        scopeType: scopeTypes[scopeName],
         attrName: match[4] || scopeName
       };
     });
@@ -771,16 +772,16 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
     if (isObject(directive.scope)) {
       if (directive.bindToController === true) {
         bindings.bindToController = parseIsolateBindings(directive.scope,
-                                                         directiveName, true);
+                                                         directiveName, true, directive.scopeTypes);
         bindings.isolateScope = {};
       } else {
         bindings.isolateScope = parseIsolateBindings(directive.scope,
-                                                     directiveName, false);
+                                                     directiveName, false, directive.scopeTypes);
       }
     }
     if (isObject(directive.bindToController)) {
       bindings.bindToController =
-          parseIsolateBindings(directive.bindToController, directiveName, true);
+          parseIsolateBindings(directive.bindToController, directiveName, true, directive.scopeTypes);
     }
     if (isObject(bindings.bindToController)) {
       var controller = directive.controller;
@@ -850,6 +851,10 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
                 directive.name = directive.name || name;
                 directive.require = directive.require || (directive.controller && directive.name);
                 directive.restrict = directive.restrict || 'EA';
+
+                // if debugInfo is not enabled, don't even invoke scopeTypes function so there is minimal perf hit
+                directive.scopeTypes = debugInfoEnabled ? directive.scopeTypes() : undefined;
+
                 var bindings = directive.$$bindings =
                     parseDirectiveBindings(directive, directive.name);
                 if (isObject(bindings.isolateScope)) {
@@ -2563,6 +2568,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       forEach(bindings, function(definition, scopeName) {
         var attrName = definition.attrName,
         optional = definition.optional,
+        scopeType = definition.scopeType || noop,
         mode = definition.mode, // @, =, or &
         lastValue,
         parentGet, parentSet, compare;
@@ -2583,6 +2589,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
               // If the attribute has been provided then we trigger an interpolation to ensure
               // the value is there for use in the link fn
               destination[scopeName] = $interpolate(attrs[attrName])(scope);
+              checkScopeType(scopeType, destination[scopeName], attrName);
             }
             break;
 
@@ -2654,6 +2661,14 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         return noop;
       }
       return destroyBindings;
+
+      function checkScopeType(scopeType, val, attrName) {
+        /* jslint devel: true */
+        var result = scopeType(val);
+        if (result) {
+          console.warn(directive.name + ' directive scopeTypes failure for `' + attrName + '`: ' + result.message);
+        }
+      }
     }
   }];
 }

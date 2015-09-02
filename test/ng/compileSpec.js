@@ -2769,6 +2769,55 @@ describe('$compile', function() {
           );
         });
       });
+
+      describe('scopeTypes', function() {
+        /* jslint devel: true */
+        var originalWarn;
+        beforeEach(function() {
+          originalWarn = console.warn;
+          console.warn = jasmine.createSpy('consoleWarn');
+        });
+        beforeEach(module(function() {
+          directive('scopeAttribute', function() {
+            return {
+              scopeTypes: function() {
+                // note: the normal implementation of this would likely use
+                // a library like api-check which has a much more concise,
+                // declaritive API
+                return {
+                  type: function(val) {
+                    if (val !== 'person' && val !== 'bird') {
+                      return new Error('must be either `person` or `bird`');
+                    }
+                  }
+                };
+              },
+              scope: {
+                type: '@'
+              }
+            };
+          });
+        }));
+
+        it('should compile without warning when scopeType checks return nothing', inject(
+          function($compile, $rootScope) {
+            $compile('<scope-attribute type="person"></scopre-attribute>')($rootScope);
+          })
+        );
+
+        it('should warn when scopeType checks return an error', inject(
+          function($compile, $rootScope) {
+            $compile('<scope-attribute type="frog"></scopre-attribute>')($rootScope);
+            expect(console.warn).toHaveBeenCalledOnceWith(
+              'scopeAttribute directive scopeTypes failure for `type`: ' +
+              'must be either `person` or `bird`');
+          })
+        );
+
+        afterEach(function() {
+          console.warn = originalWarn;
+        });
+      });
     });
   });
 
